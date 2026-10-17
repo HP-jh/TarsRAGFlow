@@ -1,29 +1,12 @@
-# Build outputs
-bin/
-dist/
 *.exe
 *.dll
 *.so
 *.dylib
-
-# Test binary
 *.test
 *.out
-
-# Go workspace
-go.work
-go.work.sum
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Secrets
+/vendor/
+/dist/
+/build/
 .env
 .env.local
-config.local.json
+.DS_Store
