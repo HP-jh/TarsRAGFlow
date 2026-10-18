@@ -12,11 +12,13 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
 
-var Version = "1.1.0"
+var Version = "1.2.0"
 const RepoName = "TarsRAGFlow"
 
 type Client struct {
@@ -130,8 +132,55 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+type rateLimiter struct {
+	mu      sync.Mutex
+	buckets map[string]*tokenBucket
+	limit   int
+	window  time.Duration
+}
+
+type tokenBucket struct {
+	tokens int
+	last   time.Time
+}
+
+func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	return &rateLimiter{buckets: make(map[string]*tokenBucket), limit: limit, window: window}
+}
+
+func (rl *rateLimiter) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	b, ok := rl.buckets[ip]
+	if !ok || now.Sub(b.last) > rl.window {
+		rl.buckets[ip] = &tokenBucket{tokens: rl.limit - 1, last: now}
+		return true
+	}
+	if b.tokens > 0 {
+		b.tokens--
+		return true
+	}
+	return false
+}
+
+var globalLimiter = newRateLimiter(60, time.Minute)
+
+func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+		if idx := strings.Index(ip, ":"); idx != -1 { ip = ip[:idx] }
+		if !globalLimiter.allow(ip) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "请求过于频繁，请稍后再试"})
+			return
+		}
+		next(w, r)
+	}
+}
+
 func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Client)) http.HandlerFunc {
-	return loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	return rateLimitMiddleware(loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -140,7 +189,7 @@ func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Cli
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		fn(w, r, client)
-	})
+	})))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request, client *Client) {

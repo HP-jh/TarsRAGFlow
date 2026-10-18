@@ -72,3 +72,14 @@ func TestLoggingMiddleware(t *testing.T) {
 	})(w, req)
 	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
 }
+
+func TestRateLimitMiddleware(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.RemoteAddr = "127.0.0.1:1234"
+	w := httptest.NewRecorder()
+	rateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})(w, req)
+	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+}
