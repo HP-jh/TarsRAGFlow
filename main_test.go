@@ -63,7 +63,6 @@ func TestClientReq_MockServer(t *testing.T) {
 }
 
 func TestLoggingMiddleware(t *testing.T) {
-	client := NewClient("", "")
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
 	loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +73,6 @@ func TestLoggingMiddleware(t *testing.T) {
 }
 
 func TestRateLimitMiddleware(t *testing.T) {
-	client := NewClient("", "")
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	req.RemoteAddr = "127.0.0.1:1234"
 	w := httptest.NewRecorder()
