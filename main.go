@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "1.2.0"
+var Version = "1.3.0"
 const RepoName = "TarsRAGFlow"
 
 type Client struct {
@@ -89,6 +91,14 @@ func main() {
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { withClient(client, healthHandler)(w, r) })
 	http.HandleFunc("/tools", func(w http.ResponseWriter, r *http.Request) { withClient(client, toolsHandler)(w, r) })
 	http.HandleFunc("/invoke", func(w http.ResponseWriter, r *http.Request) { withClient(client, invokeHandler)(w, r) })
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"requests": reqCounter.Load(),
+			"errors":   errCounter.Load(),
+			"limited":  limitCounter.Load(),
+			"version":  Version,
+		})
+	})
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -104,6 +114,18 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+var (
+	reqCounter   atomic.Int64
+	errCounter   atomic.Int64
+	limitCounter atomic.Int64
+)
+
+func genRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 type responseRecorder struct {
@@ -126,9 +148,14 @@ func (rr *responseRecorder) Write(b []byte) (int, error) {
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		reqID := r.Header.Get("X-Request-ID")
+		if reqID == "" { reqID = genRequestID() }
+		w.Header().Set("X-Request-ID", reqID)
 		rr := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 		next(rr, r)
-		log.Printf("[%s] %s %s -> %d (%d bytes, %v)", RepoName, r.Method, r.URL.Path, rr.status, rr.size, time.Since(start))
+		log.Printf("[%s] reqID=%s %s %s -> %d (%d bytes, %v)", RepoName, reqID, r.Method, r.URL.Path, rr.status, rr.size, time.Since(start))
+		reqCounter.Add(1)
+		if rr.status >= 400 { errCounter.Add(1) }
 	}
 }
 
@@ -171,6 +198,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		ip := r.RemoteAddr
 		if idx := strings.Index(ip, ":"); idx != -1 { ip = ip[:idx] }
 		if !globalLimiter.allow(ip) {
+			limitCounter.Add(1)
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "请求过于频繁，请稍后再试"})
 			return

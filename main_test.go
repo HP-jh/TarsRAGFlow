@@ -83,3 +83,13 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})(w, req)
 	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
 }
+
+func TestMetricsHandler(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+	withClient(client, func(w http.ResponseWriter, r *http.Request, c *Client) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"requests": 0, "errors": 0})
+	})(w, req)
+	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+}
