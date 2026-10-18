@@ -61,3 +61,14 @@ func TestClientReq_MockServer(t *testing.T) {
 	if err != nil { t.Fatalf("unexpected err: %v", err) }
 	if res["status"] != "ok" { t.Fatalf("expected ok, got %v", res["status"]) }
 }
+
+func TestLoggingMiddleware(t *testing.T) {
+	client := NewClient("", "")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+	loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	})(w, req)
+	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
+}

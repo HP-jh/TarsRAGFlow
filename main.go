@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var Version = "1.0.0"
+var Version = "1.1.0"
 const RepoName = "TarsRAGFlow"
 
 type Client struct {
@@ -104,8 +104,34 @@ func main() {
 	}
 }
 
-func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Client)) http.HandlerFunc {
+type responseRecorder struct {
+	http.ResponseWriter
+	status int
+	size   int
+}
+
+func (rr *responseRecorder) WriteHeader(code int) {
+	rr.status = code
+	rr.ResponseWriter.WriteHeader(code)
+}
+
+func (rr *responseRecorder) Write(b []byte) (int, error) {
+	n, err := rr.ResponseWriter.Write(b)
+	rr.size += n
+	return n, err
+}
+
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rr := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
+		next(rr, r)
+		log.Printf("[%s] %s %s -> %d (%d bytes, %v)", RepoName, r.Method, r.URL.Path, rr.status, rr.size, time.Since(start))
+	}
+}
+
+func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Client)) http.HandlerFunc {
+	return loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -114,7 +140,7 @@ func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Cli
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		fn(w, r, client)
-	}
+	})
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request, client *Client) {
