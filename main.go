@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "1.4.0"
+var Version = "1.5.0"
 const RepoName = "TarsRAGFlow"
 
 type Client struct {
@@ -39,7 +39,14 @@ func NewClient(endpoint, apiKey string) *Client {
 	return &Client{
 		Endpoint: strings.TrimRight(endpoint, "/"),
 		APIKey:   apiKey,
-		Client:   &http.Client{Timeout: 30 * time.Second},
+		Client: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				IdleConnTimeout:     90 * time.Second,
+				MaxIdleConnsPerHost: 10,
+			},
+		},
 	}
 }
 
@@ -113,7 +120,11 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Printf("[%s] shutting down", RepoName)
-		_ = srv.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("[%s] shutdown error: %v", RepoName, err)
+		}
 	}()
 	if mode == "stdio" {
 		runStdioServer(client)

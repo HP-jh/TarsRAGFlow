@@ -100,3 +100,9 @@ func TestNewClient_Defaults(t *testing.T) {
 	c2 := NewClient("example.com", "key")
 	if c2.Endpoint != "https://example.com" { t.Fatalf("unexpected endpoint: %s", c2.Endpoint) }
 }
+
+func TestClientConnectionPool(t *testing.T) {
+	c := NewClient("https://example.com", "key")
+	if c.Client == nil { t.Fatal("client nil") }
+	if c.Client.Transport == nil { t.Fatal("transport nil") }
+}
