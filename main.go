@@ -237,7 +237,7 @@ func withClient(client *Client, fn func(http.ResponseWriter, *http.Request, *Cli
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		fn(w, r, client)
-	})))
+	}))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request, client *Client) {
