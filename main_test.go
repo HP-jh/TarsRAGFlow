@@ -93,3 +93,10 @@ func TestMetricsHandler(t *testing.T) {
 	})(w, req)
 	if w.Code != http.StatusOK { t.Fatalf("expected 200, got %d", w.Code) }
 }
+
+func TestNewClient_Defaults(t *testing.T) {
+	c := NewClient("", "")
+	if c.Endpoint != "https://api.example.com" { t.Fatalf("unexpected endpoint: %s", c.Endpoint) }
+	c2 := NewClient("example.com", "key")
+	if c2.Endpoint != "https://example.com" { t.Fatalf("unexpected endpoint: %s", c2.Endpoint) }
+}

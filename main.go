@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "1.3.0"
+var Version = "1.4.0"
 const RepoName = "TarsRAGFlow"
 
 type Client struct {
@@ -32,6 +32,9 @@ type Client struct {
 func NewClient(endpoint, apiKey string) *Client {
 	if endpoint == "" {
 		endpoint = "https://api.example.com"
+	}
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "https://" + endpoint
 	}
 	return &Client{
 		Endpoint: strings.TrimRight(endpoint, "/"),
@@ -83,6 +86,12 @@ func main() {
 		return
 	}
 	cfg := loadConfig()
+	if cfg["endpoint"] == "" {
+		log.Printf("[%s] 警告：未配置上游地址，使用默认地址", RepoName)
+	}
+	if cfg["api_key"] == "" {
+		log.Printf("[%s] 警告：未配置 API 密钥，部分接口可能无法访问", RepoName)
+	}
 	client := NewClient(cfg["endpoint"], cfg["api_key"])
 	log.Printf("[%s] starting v%s endpoint=%s", RepoName, Version, cfg["endpoint"])
 	mode := os.Getenv("TARS_MCP_MODE")
